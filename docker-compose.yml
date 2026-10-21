@@ -1,0 +1,7 @@
+services:
+  # Serviço de execução da suíte de testes.
+  # Uso: docker compose run --rm tests
+  tests:
+    build: .
+    image: sdd-task-analyzer:latest
+    command: pytest tests/test_harness.py -v --cov=src --cov-report=term-missing --cov-fail-under=90

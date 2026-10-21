@@ -1,57 +1,56 @@
-# sdd-taskanalyzer
+# sdd-task-analyzer
 
-Sistema TaskAnalyzer desenvolvido com Spec-Driven Development (SDD) e assistentes de IA, com Test Harness em pytest.
+Módulo **TaskAnalyzer** de análise de tarefas e produtividade, desenvolvido como projeto cumulativo do Bootcamp III.
 
-**Status do build:** testes locais executados, ver seção *Execução*.
+Calcula o tempo médio de conclusão, a taxa de atraso e os indicadores por prioridade. É uma biblioteca pura, sem interface e sem persistência.
 
 ## Estrutura
 
 ```
-sdd-taskanalyzer/
-├── README.md
-├── CONTEXT_RULES.md          # regras de governança para a IA
-├── .gitignore
+sdd-task-analyzer/
+├── .github/workflows/ci.yml   # CI: testes automatizados no GitHub Actions
+├── Dockerfile                 # Imagem python:3.11-slim
+├── docker-compose.yml         # Execução da suíte em um único comando
+├── CONTEXT_RULES.md           # Governança de IA
+├── specs/task_analyzer_spec.md
 ├── requirements.txt
-├── specs/
-│   └── task_analyzer_spec.md # contrato SDD
-├── tests/
-│   └── test_harness.py       # cenários de aceite 1 e 2 + casos de borda
-└── src/
-    └── task_analyzer.py      # função analyze_tasks e TaskValidationError
+├── src/task_analyzer.py
+├── tests/test_harness.py
+└── README.md
 ```
 
-## Requisitos
+## Como executar
 
-- Python 3.11+
-
-## Instalação
+### Localmente (Python 3.11+)
 
 ```bash
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+pytest tests/test_harness.py -v
+pytest --cov=src --cov-report=term-missing
 ```
 
-## Execução dos testes
+### Com Docker
 
 ```bash
-pytest -v
+docker compose run --rm tests
 ```
 
-## Uso
+Ou, sem o Compose:
 
-```python
-from datetime import datetime
-from src.task_analyzer import Task, analyze_tasks
-
-tarefas = [
-    Task("Relatório", "alta", datetime(2026, 10, 1, 8), datetime(2026, 10, 1, 20), datetime(2026, 10, 2)),
-    Task("Revisão", "baixa", datetime(2026, 10, 5)),
-]
-print(analyze_tasks(tarefas))
+```bash
+docker build -t sdd-task-analyzer .
+docker run --rm sdd-task-analyzer
 ```
 
-## Fluxo de contribuição
+## Integração contínua
 
-- `main` é a branch estável.
-- Funcionalidades são desenvolvidas em `feature/*` e integradas via Pull Request.
+O workflow `.github/workflows/ci.yml` roda a suíte em `ubuntu-latest` com Python 3.11. Ele é disparado por push e Pull Request nas branches `main` e `develop`, e exige cobertura mínima de 90%.
+
+## Documentação
+
+- Especificação: [specs/task_analyzer_spec.md](specs/task_analyzer_spec.md)
+- Regras para IA: [CONTEXT_RULES.md](CONTEXT_RULES.md)
+
+## Versionamento
+
+Git Flow simplificado: `main`, `develop` e `feature/*`. Commits no padrão Conventional Commits. Merge somente por Pull Request revisado.

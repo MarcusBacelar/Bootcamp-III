@@ -1,54 +1,69 @@
 # Especificação SDD — TaskAnalyzer
 
-> **RASCUNHO.** Este arquivo foi reconstruído a partir do enunciado da Fase 2.
-> Substitua pelo conteúdo do seu documento da Fase 1 (Google Docs) antes de
-> entregar. Se houver divergência, a especificação da Fase 1 vale.
+## 1. Visão geral e contrato de negócio
 
-## 1. Objetivo
+**Propósito:** módulo de análise de tarefas e produtividade. É uma biblioteca pura, sem interface gráfica e sem persistência. Calcula:
 
-Calcular métricas agregadas sobre uma lista de tarefas.
+- tempo médio de conclusão, em horas;
+- taxa de atraso, em percentual;
+- indicadores por prioridade.
 
-## 2. Entrada
+### 1.1 Entrada: registro de tarefa
 
-Lista de objetos `Task` com os campos:
-
-| Campo | Tipo | Obrigatório | Descrição |
+| Campo | Tipo | Obrigatório | Regra |
 |---|---|---|---|
-| titulo | str | sim | Identificação da tarefa |
-| prioridade | str | sim | Ex.: "alta", "media", "baixa" |
-| data_criacao | datetime | sim | Momento de criação |
-| data_conclusao | datetime \| None | não | Momento de conclusão; ausente = pendente |
-| prazo | datetime \| None | não | Data limite para conclusão |
+| `id_tarefa` | texto (UUID) | sim | não vazio |
+| `titulo` | texto | sim | não vazio |
+| `prioridade` | enum | sim | `baixa`, `media` ou `alta` |
+| `data_criacao` | datetime ISO 8601 | sim | em UTC |
+| `data_conclusao` | datetime ISO 8601 | não | posterior a `data_criacao`; obrigatória se `status` for `concluida` |
+| `prazo_estimado` | datetime ISO 8601 | não | em UTC |
+| `status` | enum | sim | `pendente`, `em_andamento`, `concluida` ou `cancelada` |
 
-## 3. Saída
+### 1.2 Saída: `ResultadoAnalise`
 
-Dicionário com:
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `quantidade_tarefas_total` | int | tarefas, sem as canceladas |
+| `tempo_medio_conclusao_horas` | float | média das tarefas concluídas |
+| `taxa_atraso_percentual` | float (0–100) | concluídas após o prazo, entre as que têm prazo |
+| `indicadores_por_prioridade` | dict[str, IndicadorPrioridade] | uma entrada por prioridade presente |
+| `gerado_em` | datetime UTC | momento da geração |
 
-- `total_tarefas`: número total de tarefas.
-- `total_concluidas`: tarefas com `data_conclusao`.
-- `total_pendentes`: tarefas sem `data_conclusao`.
-- `tempo_medio_conclusao_horas`: média, em horas, de `data_conclusao - data_criacao` entre as concluídas. Arredondado em 2 casas.
-- `tempo_medio_por_prioridade`: mesma média, agrupada por `prioridade`.
-- `taxa_atraso_percentual`: `atrasadas / concluidas_com_prazo * 100`, onde atrasada = `data_conclusao > prazo`. Arredondado em 2 casas.
+Cada `IndicadorPrioridade` contém `quantidade_tarefas`, `tempo_medio_conclusao_horas` e `taxa_atraso_percentual`, com o mesmo significado acima, restrito ao grupo.
 
-## 4. Regras
+### 1.3 Regras de negócio
 
-- R1: Se `data_conclusao < data_criacao`, levantar `TaskValidationError`.
-- R2: Médias sem elementos retornam `0.0`. Nunca lançar exceção por divisão por zero.
-- R3: Tarefas pendentes não entram em médias de tempo.
+1. Só tarefas `concluida` entram no tempo médio.
+2. Tarefas `cancelada` são excluídas de todas as métricas.
+3. `data_conclusao` deve ser posterior a `data_criacao`. Caso contrário, `DataInvalidaError`.
+4. Todas as datas são UTC. Datas sem fuso são rejeitadas.
+5. Lista vazia produz métricas zeradas, sem exceção.
+6. Campo obrigatório ausente gera `CampoObrigatorioAusenteError`. Valor inválido gera `ValorInvalidoError`.
+7. A função pública não tem efeitos colaterais.
 
-## 5. Cenários de aceite (Dado-Quando-Então)
+### 1.4 Premissas registradas
 
-**Cenário 1 — Sucesso**
-- Dado 4 tarefas: 3 concluídas (12h, 48h e 6h; a de 48h após o prazo) e 1 pendente
-- Quando `analyze_tasks` é chamada
-- Então total = 4, concluídas = 3, pendentes = 1, tempo médio geral = 22.0, média alta = 30.0, média baixa = 6.0, taxa de atraso = 33.33
+Estes pontos não estavam detalhados no contrato original. Foram definidos aqui e precisam de confirmação antes da Fase 2:
 
-**Cenário 2 — Erro**
-- Dado uma tarefa com `data_conclusao` anterior a `data_criacao`
-- Quando `analyze_tasks` é chamada
-- Então é levantada `TaskValidationError`
+- **Atraso:** uma tarefa concluída está atrasada quando `data_conclusao > prazo_estimado`. A taxa considera só as concluídas que têm `prazo_estimado`.
+- **Tarefa concluída sem `data_conclusao`:** é tratada como campo obrigatório ausente.
+- **`IndicadorPrioridade`:** a estrutura interna foi definida com os três campos listados acima.
+- **`gerado_em`:** é opcional na função. Se omitido, usa o horário atual em UTC.
 
-**Casos de borda**
-- Lista vazia → todos os zeros, sem exceção.
-- Apenas pendentes → médias zero, taxa de atraso zero.
+## 2. Cenários de aceite
+
+1. **Sucesso:** conjunto válido com várias prioridades produz as métricas corretas.
+2. **Exceção:** `data_conclusao` anterior a `data_criacao` lança `DataInvalidaError`.
+3. **Borda:** lista vazia produz métricas zeradas, sem exceção.
+4. **Exceção:** campo `prioridade` ausente lança `CampoObrigatorioAusenteError`.
+5. **Sucesso:** `indicadores_por_prioridade` tem uma entrada por prioridade presente.
+6. **Exceção:** prioridade fora do domínio (ex.: `urgente`) lança `ValorInvalidoError`.
+
+Os cenários são imutáveis na Fase 2. Eles estão em `tests/test_harness.py`.
+
+## 3. Critério de homologação
+
+- Cobertura mínima de 90% em `src/task_analyzer.py`.
+- 100% dos testes passando.
+- Execução: `pytest --cov=src --cov-report=term-missing`.
